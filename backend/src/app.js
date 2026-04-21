@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const documentRoutes = require('./routes/documentRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 
 const app = express();
 
@@ -15,5 +16,6 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/documents', documentRoutes);
+app.use('/api/chat', chatRoutes);
 
 module.exports = app;
