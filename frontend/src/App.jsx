@@ -1,121 +1,97 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from 'react';
+import FileUpload from './components/FileUpload';
+import AnalysisResult from './components/AnalysisResult';
+import { uploadDocument, analyzeDocument } from './services/api';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [analysis, setAnalysis] = useState(null);
+  const [conversationId, setConversationId] = useState(null);
+  const [fileName, setFileName] = useState(null);
+
+  const handleUpload = async (file) => {
+    setIsLoading(true);
+    setError(null);
+    setAnalysis(null);
+
+    try {
+      const { text, fileName: name } = await uploadDocument(file);
+      setFileName(name);
+      const result = await analyzeDocument(text, name);
+      setAnalysis(result.analysis);
+      setConversationId(result.conversationId);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div style={{
+      minHeight: '100vh', background: '#f0f4f8',
+      fontFamily: "'Segoe UI', system-ui, sans-serif",
+    }}>
+      {/* Header */}
+      <div style={{ background: '#1a3a5c', padding: '16px 32px', color: 'white' }}>
+        <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '700' }}>
+          🛡️ Insurance Document Analyzer
+        </h1>
+        <p style={{ margin: '2px 0 0', fontSize: '12px', opacity: 0.7 }}>
+          AI-powered document analysis — Powered by Gemini
+        </p>
+      </div>
 
-      <div className="ticks"></div>
+      {/* Content */}
+      <div style={{ maxWidth: '860px', margin: '32px auto', padding: '0 16px' }}>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        {/* Upload Card */}
+        <div style={{
+          background: 'white', borderRadius: '12px',
+          padding: '24px', marginBottom: '24px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.07)'
+        }}>
+          <h2 style={{ margin: '0 0 16px', fontSize: '16px', color: '#1a3a5c' }}>
+            Upload Document
+          </h2>
+          <FileUpload onUploadComplete={handleUpload} isLoading={isLoading} />
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        {/* Loading */}
+        {isLoading && (
+          <div style={{ textAlign: 'center', padding: '32px', color: '#2c6fad', fontSize: '15px' }}>
+            ⏳ Analyzing document with AI...
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            background: '#fff0f0', border: '1px solid #ffcccc',
+            borderRadius: '8px', padding: '16px', color: '#c0392b', marginBottom: '16px'
+          }}>
+            ❌ {error}
+          </div>
+        )}
+
+        {/* Analysis Result */}
+        {analysis && (
+          <div style={{
+            background: 'white', borderRadius: '12px',
+            padding: '24px', marginBottom: '24px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.07)'
+          }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: '16px', color: '#1a3a5c' }}>
+              📊 Analysis — {fileName}
+            </h2>
+            <AnalysisResult analysis={analysis} />
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
 }
 
-export default App
+export default App;
