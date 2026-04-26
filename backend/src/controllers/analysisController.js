@@ -60,7 +60,20 @@ complexityScore must be an integer from 1 (very simple) to 10 (extremely complex
 
     } catch (error) {
         console.error('Analysis error:', error.message);
-        return res.status(500).json({ error: 'Failed to analyze document' });
+
+        if (error.message?.includes('503') || error.message?.includes('Service Unavailable')) {
+            return res.status(503).json({
+                error: 'Gemini AI is currently experiencing high demand. Please wait 30 seconds and try again.'
+            });
+        }
+
+        if (error.message?.includes('429') || error.message?.includes('quota')) {
+            return res.status(429).json({
+                error: 'API rate limit reached. Please wait a minute before trying again.'
+            });
+        }
+
+        return res.status(500).json({ error: 'Failed to analyze document. Please try again.' });
     }
 };
 

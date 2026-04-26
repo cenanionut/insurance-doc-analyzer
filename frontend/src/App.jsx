@@ -2,6 +2,7 @@ import { useState } from 'react';
 import FileUpload from './components/FileUpload';
 import AnalysisResult from './components/AnalysisResult';
 import { uploadDocument, analyzeDocument } from './services/api';
+import ChatBox from './components/ChatBox';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
@@ -22,7 +23,16 @@ function App() {
       setAnalysis(result.analysis);
       setConversationId(result.conversationId);
     } catch (err) {
-      setError(err.response?.data?.error || 'Something went wrong. Please try again.');
+      const msg = err.response?.data?.error || 'Something went wrong. Please try again.';
+      const status = err.response?.status;
+
+      if (status === 503) {
+        setError('⚠️ Gemini AI is currently experiencing high demand. Please wait 30 seconds and try again.');
+      } else if (status === 429) {
+        setError('⚠️ API rate limit reached. Please wait a minute before trying again.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -86,6 +96,18 @@ function App() {
               📊 Analysis — {fileName}
             </h2>
             <AnalysisResult analysis={analysis} />
+          </div>
+        )}
+
+        {conversationId && (
+          <div style={{
+            background: 'white', borderRadius: '12px',
+            padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)'
+          }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: '16px', color: '#1a3a5c' }}>
+              💬 Ask Questions About the Document
+            </h2>
+            <ChatBox conversationId={conversationId} />
           </div>
         )}
 
