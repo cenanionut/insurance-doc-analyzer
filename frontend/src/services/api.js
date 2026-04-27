@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
     baseURL: '/api',
+    withCredentials: true, // trimite cookies cu fiecare request
 });
 
 export const uploadDocument = async (file) => {

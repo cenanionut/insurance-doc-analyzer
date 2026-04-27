@@ -53,6 +53,10 @@ complexityScore must be an integer from 1 (very simple) to 10 (extremely complex
             messages: []
         });
 
+        if (req.incrementDailyCount) {
+            await req.incrementDailyCount();
+        }
+
         return res.json({
             conversationId: conversation._id,
             analysis

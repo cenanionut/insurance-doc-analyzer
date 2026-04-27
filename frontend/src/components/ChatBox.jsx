@@ -23,10 +23,18 @@ const ChatBox = ({ conversationId }) => {
             const { answer } = await sendChatMessage(conversationId, question);
             setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: '❌ Failed to get a response. Please try again.'
-            }]);
+            const status = err.response?.status;
+            const serverMessage = err.response?.data?.error;
+
+            let errorText = '❌ Failed to get a response. Please try again.';
+
+            if (status === 429) {
+                errorText = `⚠️ ${serverMessage || 'Message limit reached for this session.'}`;
+            } else if (status === 503) {
+                errorText = '⚠️ Gemini AI is currently experiencing high demand. Please wait and try again.';
+            }
+
+            setMessages(prev => [...prev, { role: 'assistant', content: errorText }]);
         } finally {
             setIsLoading(false);
         }

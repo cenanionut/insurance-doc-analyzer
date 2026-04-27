@@ -48,7 +48,9 @@ Answer clearly and concisely, referencing specific parts of the document where r
         conversation.messages.push({ role: 'user', content: question });
         conversation.messages.push({ role: 'assistant', content: answer });
         await conversation.save();
-
+        if (req.incrementSessionChat) {
+            req.incrementSessionChat(res);
+        }
         return res.json({ answer });
 
     } catch (error) {
