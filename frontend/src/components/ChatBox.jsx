@@ -1,136 +1,229 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { sendChatMessage } from '../services/api';
 
+/* ── Constants ────────────────────────────────────────────── */
+const MAX_CHARS = 500;
+
+/* ── Timestamp helper ─────────────────────────────────────── */
+const formatTime = (date) =>
+  date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/* ── Avatar ───────────────────────────────────────────────── */
+const Avatar = ({ role }) => (
+  <div className={`cb-avatar cb-avatar--${role}`} aria-hidden="true">
+    {role === 'user' ? 'U' : 'AI'}
+  </div>
+);
+
+/* ── Typing indicator ─────────────────────────────────────── */
+const TypingIndicator = () => (
+  /* A11Y: aria-live + role="status" announces typing to screen readers */
+  <div className="cb-message cb-message--assistant cb-message--typing" role="status" aria-live="polite" aria-label="AI is typing">
+    <Avatar role="assistant" />
+    <div className="cb-bubble cb-bubble--assistant">
+      <span className="cb-typing" aria-hidden="true">
+        <span className="cb-typing__dot" style={{ animationDelay: '0ms' }} />
+        <span className="cb-typing__dot" style={{ animationDelay: '160ms' }} />
+        <span className="cb-typing__dot" style={{ animationDelay: '320ms' }} />
+      </span>
+    </div>
+  </div>
+);
+
+/* ── Empty state ──────────────────────────────────────────── */
+const EmptyState = () => (
+  /* A11Y FIX (4.1.2): Added role="status" so aria-label is valid on div */
+  <div className="cb-empty" role="status" aria-label="No messages yet">
+    <div className="cb-empty__illustration" aria-hidden="true">
+      <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+        <circle cx="36" cy="36" r="36" fill="var(--color-accent-50)" />
+        <rect x="16" y="22" width="32" height="14" rx="7" fill="var(--color-primary-200)" />
+        <rect x="22" y="42" width="26" height="12" rx="6" fill="var(--color-accent-200)" />
+        <circle cx="54" cy="20" r="3" fill="var(--color-accent-400)" />
+        <circle cx="14" cy="46" r="2" fill="var(--color-primary-400)" />
+        <circle cx="58" cy="50" r="2" fill="var(--color-warning-400)" />
+      </svg>
+    </div>
+    <p className="cb-empty__title">Ask anything about the document</p>
+    <p className="cb-empty__hint">
+      Coverage details, exclusions, premium calculations, claim processes — just ask.
+    </p>
+  </div>
+);
+
+/* ── Chat bubble ──────────────────────────────────────────── */
+const ChatMessage = ({ msg }) => (
+  <div className={`cb-message cb-message--${msg.role}`}>
+    {msg.role === 'assistant' && <Avatar role="assistant" />}
+    <div className="cb-bubble-wrap">
+      <div className={`cb-bubble cb-bubble--${msg.role}`}>
+        <p className="cb-bubble__text">{msg.content}</p>
+      </div>
+      <time className="cb-timestamp" dateTime={msg.timestamp.toISOString()}>
+        {formatTime(msg.timestamp)}
+      </time>
+    </div>
+    {msg.role === 'user' && <Avatar role="user" />}
+  </div>
+);
+
+/* ── Send icon ────────────────────────────────────────────── */
+const SendIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+    <path d="M3 9l12-6-6 12V9H3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+  </svg>
+);
+
+/* ── Main component ───────────────────────────────────────── */
 const ChatBox = ({ conversationId }) => {
-    const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const bottomRef = useRef(null);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const bottomRef = useRef(null);
+  const textareaRef = useRef(null);
 
-    useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+  /* Scroll to bottom on new messages */
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
-    const handleSend = async () => {
-        const question = input.trim();
-        if (!question || isLoading) return;
+  /* Auto-resize textarea */
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, []);
 
-        setInput('');
-        setMessages(prev => [...prev, { role: 'user', content: question }]);
-        setIsLoading(true);
+  useEffect(() => {
+    resizeTextarea();
+  }, [input, resizeTextarea]);
 
-        try {
-            const { answer } = await sendChatMessage(conversationId, question);
-            setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
-        } catch (err) {
-            const status = err.response?.status;
-            const serverMessage = err.response?.data?.error;
+  const handleSend = async () => {
+    const question = input.trim();
+    if (!question || isLoading) return;
 
-            let errorText = '❌ Failed to get a response. Please try again.';
+    setInput('');
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: question, timestamp: new Date() },
+    ]);
+    setIsLoading(true);
 
-            if (status === 429) {
-                errorText = `⚠️ ${serverMessage || 'Message limit reached for this session.'}`;
-            } else if (status === 503) {
-                errorText = '⚠️ Gemini AI is currently experiencing high demand. Please wait and try again.';
-            }
+    try {
+      const { answer } = await sendChatMessage(conversationId, question);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: answer, timestamp: new Date() },
+      ]);
+    } catch (err) {
+      const status = err.response?.status;
+      const serverMessage = err.response?.data?.error;
 
-            setMessages(prev => [...prev, { role: 'assistant', content: errorText }]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+      let errorText = '❌ Failed to get a response. Please try again.';
+      if (status === 429) {
+        errorText = `⚠️ ${serverMessage || 'Message limit reached for this session.'}`;
+      } else if (status === 503) {
+        errorText = '⚠️ Gemini AI is experiencing high demand. Please wait and retry.';
+      }
 
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    };
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: errorText, timestamp: new Date() },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '480px' }}>
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+    /* A11Y FIX (2.1.1): Escape blurs textarea so keyboard users can
+       easily exit the chat input and continue tabbing */
+    if (e.key === 'Escape') {
+      textareaRef.current?.blur();
+    }
+  };
 
-            {/* Messages */}
-            <div style={{
-                flex: 1, overflowY: 'auto', padding: '16px',
-                display: 'flex', flexDirection: 'column', gap: '12px',
-                background: '#f8f9fa', borderRadius: '8px', marginBottom: '12px'
-            }}>
-                {messages.length === 0 && (
-                    <div style={{ textAlign: 'center', color: '#aaa', marginTop: '80px', fontSize: '14px' }}>
-                        <div style={{ fontSize: '32px', marginBottom: '8px' }}>💬</div>
-                        Ask anything about the document...
-                    </div>
-                )}
+  const charsLeft = MAX_CHARS - input.length;
+  const isOverLimit = charsLeft < 0;
+  const isNearLimit = charsLeft >= 0 && charsLeft <= 50;
+  const canSend = input.trim().length > 0 && !isLoading && !isOverLimit;
 
-                {messages.map((msg, i) => (
-                    <div key={i} style={{
-                        display: 'flex',
-                        justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    }}>
-                        <div style={{
-                            maxWidth: '75%',
-                            padding: '10px 14px',
-                            borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                            background: msg.role === 'user' ? '#2c6fad' : 'white',
-                            color: msg.role === 'user' ? 'white' : '#333',
-                            fontSize: '13.5px',
-                            lineHeight: '1.6',
-                            boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-                            whiteSpace: 'pre-wrap',
-                        }}>
-                            {msg.content}
-                        </div>
-                    </div>
-                ))}
+  return (
+    /* A11Y FIX (4.1.2): <section> instead of <div> for valid aria-label */
+    <section className="cb-root" aria-label="Document chat">
 
-                {isLoading && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                        <div style={{
-                            padding: '10px 16px', background: 'white', borderRadius: '12px 12px 12px 2px',
-                            fontSize: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)'
-                        }}>
-                            ⏳
-                        </div>
-                    </div>
-                )}
+      {/* ── Messages list ── */}
+      <div
+        className="cb-messages"
+        role="log"
+        aria-live="polite"
+        aria-label="Conversation messages"
+      >
+        {messages.length === 0 && !isLoading && <EmptyState />}
 
-                <div ref={bottomRef} />
-            </div>
+        {messages.map((msg, i) => (
+          <ChatMessage key={`${msg.role}-${msg.timestamp.getTime()}-${i}`} msg={msg} />
+        ))}
 
-            {/* Input */}
-            <div style={{ display: 'flex', gap: '8px' }}>
-                <textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Ask a question about the document... (Enter to send)"
-                    disabled={isLoading}
-                    rows={2}
-                    style={{
-                        flex: 1, padding: '10px 14px', borderRadius: '8px',
-                        border: '1px solid #ddd', fontSize: '13.5px',
-                        resize: 'none', fontFamily: 'inherit',
-                        outline: 'none', lineHeight: '1.5',
-                    }}
-                />
-                <button
-                    onClick={handleSend}
-                    disabled={isLoading || !input.trim()}
-                    style={{
-                        padding: '0 20px', borderRadius: '8px', border: 'none',
-                        background: isLoading || !input.trim() ? '#ccc' : '#2c6fad',
-                        color: 'white', fontWeight: '700', fontSize: '14px',
-                        cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
-                        transition: 'background 0.2s',
-                    }}
-                >
-                    Send
-                </button>
-            </div>
+        {isLoading && <TypingIndicator />}
 
+        <div ref={bottomRef} />
+      </div>
+
+      {/* ── Input area ── */}
+      <div className="cb-input-area">
+        <div className={`cb-input-wrap ${isLoading ? 'cb-input-wrap--disabled' : ''} ${isOverLimit ? 'cb-input-wrap--overlimit' : ''}`}>
+          <textarea
+            ref={textareaRef}
+            className="cb-textarea"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask about the document… (Enter to send)"
+            disabled={isLoading}
+            rows={1}
+            maxLength={MAX_CHARS + 20}
+            aria-label="Chat input"
+            aria-describedby="cb-char-counter"
+          />
+
+          <div className="cb-input-footer">
+            <span
+              id="cb-char-counter"
+              className={`cb-char-counter ${isNearLimit ? 'cb-char-counter--warn' : ''} ${isOverLimit ? 'cb-char-counter--over' : ''}`}
+              aria-live="polite"
+              aria-label={`${charsLeft} characters remaining`}
+            >
+              {charsLeft}
+            </span>
+
+            <button
+              className={`cb-send-btn ${canSend ? 'cb-send-btn--active' : ''}`}
+              onClick={handleSend}
+              disabled={!canSend}
+              aria-label={isLoading ? 'Sending message…' : 'Send message'}
+              id="cb-send-button"
+            >
+              {isLoading ? (
+                <span className="cb-send-spinner animate-spin" aria-hidden="true" />
+              ) : (
+                <SendIcon />
+              )}
+              <span className="cb-send-btn__label">{isLoading ? 'Sending' : 'Send'}</span>
+            </button>
+          </div>
         </div>
-    );
+        {/* A11Y FIX (1.4.3): hint uses --color-text-muted for ≥4.5:1 contrast */}
+        <p className="cb-input-hint">Shift+Enter for new line</p>
+      </div>
+
+    </section>
+  );
 };
 
 export default ChatBox;
