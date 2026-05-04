@@ -3,6 +3,7 @@ import FileUpload from './components/FileUpload';
 import AnalysisResult from './components/AnalysisResult';
 import { uploadDocument, analyzeDocument } from './services/api';
 import ChatBox from './components/ChatBox';
+import WelcomeModal from './components/WelcomeModal';
 import './App.css';
 
 function App() {
@@ -11,6 +12,9 @@ function App() {
   const [analysis, setAnalysis] = useState(null);
   const [conversationId, setConversationId] = useState(null);
   const [fileName, setFileName] = useState(null);
+  const [showWelcome, setShowWelcome] = useState(
+    () => !localStorage.getItem('ida_welcome_seen')
+  );
 
   const handleUpload = async (file) => {
     setIsLoading(true);
@@ -44,6 +48,16 @@ function App() {
 
   return (
     <div className="app-root">
+
+      {/* ── WELCOME MODAL (first-visit only) ─────────── */}
+      {showWelcome && (
+        <WelcomeModal
+          onClose={() => {
+            localStorage.setItem('ida_welcome_seen', '1');
+            setShowWelcome(false);
+          }}
+        />
+      )}
 
       {/* A11Y FIX (2.4.1): Skip link for keyboard users to bypass header */}
       <a href="#main-content" className="skip-link">
